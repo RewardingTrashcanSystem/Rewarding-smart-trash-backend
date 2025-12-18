@@ -1,19 +1,19 @@
 const { Pool } = require("pg");
 
 const pool = new Pool({
-  host: process.env.PGHOST,
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
-  port: process.env.PGPORT || 5432,
+  host: process.env.PGHOST?.trim(),
+  user: process.env.PGUSER?.trim(),
+  password: process.env.PGPASSWORD?.trim(),
+  database: process.env.PGDATABASE?.trim(),
+  port: Number(process.env.PGPORT) || 5432,
   ssl: {
-    rejectUnauthorized: false, // Render Postgres uses SSL
+    rejectUnauthorized: false, // required by Render
   },
 });
 
 const connectDB = async () => {
   try {
-    await pool.query("SELECT 1"); // simple test query
+    await pool.query("SELECT 1");
     console.log("✅ Connected to PostgreSQL on Render");
   } catch (err) {
     console.error("❌ PostgreSQL connection failed:", err);
