@@ -1,16 +1,19 @@
 // src/routes/rewards.js
 const express = require("express");
 const router = express.Router();
-const { sql } = require("../config/db");
+const { pool } = require("../config/db");
 const adminAuth = require("../middleware/adminAuth");
 
 // Get all rewards (accessible to all)
 router.get("/", async (req, res) => {
   try {
-    const result = await sql.query`
-      SELECT * FROM Rewards WHERE active = 1 ORDER BY required_points ASC
-    `;
-    res.json(result.recordset);
+    const result = await pool.query(
+      `SELECT * FROM rewards 
+       WHERE active = TRUE 
+       ORDER BY required_points ASC`
+    );
+
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -23,10 +26,11 @@ router.post("/", adminAuth, async (req, res) => {
   const admin_id = req.user.user_id;
 
   try {
-    await sql.query`
-      INSERT INTO Rewards (reward_name, description, required_points)
-      VALUES (${reward_name}, ${description}, ${required_points})
-    `;
+    await pool.query(
+      `INSERT INTO rewards (reward_name, description, required_points, active)
+       VALUES ($1, $2, $3, TRUE)`,
+      [reward_name, description, required_points]
+    );
     res.status(201).json({ message: "Reward created successfully" });
   } catch (err) {
     console.error(err);
@@ -40,14 +44,15 @@ router.patch("/:reward_id", adminAuth, async (req, res) => {
   const { reward_name, description, required_points, active } = req.body;
 
   try {
-    await sql.query`
-      UPDATE Rewards
-      SET reward_name = COALESCE(${reward_name}, reward_name),
-          description = COALESCE(${description}, description),
-          required_points = COALESCE(${required_points}, required_points),
-          active = COALESCE(${active}, active)
-      WHERE reward_id = ${reward_id}
-    `;
+     await pool.query(
+       `UPDATE rewards
+       SET reward_name = COALESCE($1, reward_name),
+           description = COALESCE($2, description),
+           required_points = COALESCE($3, required_points),
+           active = COALESCE($4, active)
+       WHERE reward_id = $5`,
+       [reward_name, description, required_points, active, reward_id]
+     );
     res.json({ message: "Reward updated successfully" });
   } catch (err) {
     console.error(err);

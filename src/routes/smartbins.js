@@ -1,15 +1,17 @@
 // src/routes/smartbins.js
 const express = require("express");
 const router = express.Router();
-const { sql } = require("../config/db");
+const { pool } = require("../config/db");
 const adminAuth = require("../middleware/adminAuth");
 
 // Get all bins (all users)
 router.get("/", async (req, res) => {
   try {
-    const result =
-      await sql.query`SELECT * FROM SmartBins ORDER BY created_at DESC`;
-    res.json(result.recordset);
+   const result = await pool.query(
+     `SELECT * FROM smartbins ORDER BY created_at DESC`
+   );
+
+   res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -22,10 +24,11 @@ router.post("/", adminAuth, async (req, res) => {
   const admin_id = req.user.user_id;
 
   try {
-    await sql.query`
-      INSERT INTO SmartBins (location, status, created_at)
-      VALUES (${location}, ${status || "active"}, ${admin_id})
-    `;
+    await pool.query(
+      `INSERT INTO smartbins (location, status, created_at, admin_id)
+       VALUES ($1, $2, NOW(), $3)`,
+      [location, status || "active", admin_id]
+    );
     res.status(201).json({ message: "Smart bin created successfully" });
   } catch (err) {
     console.error(err);
@@ -39,11 +42,12 @@ router.patch("/:bin_id/status", adminAuth, async (req, res) => {
   const { status } = req.body;
 
   try {
-    await sql.query`
-      UPDATE SmartBins
-      SET status = ${status}
-      WHERE bin_id = ${bin_id}
-    `;
+    await pool.query(
+      `UPDATE smartbins
+       SET status = $1
+       WHERE bin_id = $2`,
+      [status, bin_id]
+    );
     res.json({ message: "Bin status updated successfully" });
   } catch (err) {
     console.error(err);
@@ -56,11 +60,14 @@ router.get("/:bin_id", async (req, res) => {
   const bin_id = req.params.bin_id;
 
   try {
-    const result =
-      await sql.query`SELECT * FROM SmartBins WHERE bin_id = ${bin_id}`;
-    if (!result.recordset[0])
+    const result = await pool.query(
+      `SELECT * FROM smartbins WHERE bin_id = $1`,
+      [bin_id]
+    );
+
+    if (result.rows.length === 0)
       return res.status(404).json({ error: "Bin not found" });
-    res.json(result.recordset[0]);
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

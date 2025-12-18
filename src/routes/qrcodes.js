@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { sql } = require("../config/db");
+const { pool } = require("../config/db");
 const auth = require("../middleware/auth");
 // Helper function to calculate points
 const calculatePoints = (trash_type, item_count) => {
@@ -15,38 +15,45 @@ router.post("/scan",auth, async (req, res) => {
   const user_id = req.user.user_id;
   try {
     // 1. Check user exists
-    const userResult =
-      await sql.query`SELECT * FROM Users WHERE user_id = ${user_id}`;
-    if (!userResult.recordset[0])
+    const userResult = await pool.query(
+      `SELECT * FROM users WHERE user_id = $1`,
+      [user_id]
+    );
+    if (userResult.rows.length === 0)
       return res.status(400).json({ error: "User not found" });
 
     // 2. Check QR code exists and is not used
-    const qrResult = await sql.query`
-      SELECT * FROM QRCodes WHERE qr_id = ${qr_id} AND is_used = 0
-    `;
-    if (!qrResult.recordset[0])
+    const qrResult = await pool.query(
+      `SELECT * FROM qrcodes WHERE qr_id = $1 AND is_used = FALSE`,
+      [qr_id]
+    );
+    if (qrResult.rows.length === 0)
       return res.status(400).json({ error: "QR code invalid or already used" });
 
-    const bin_id = qrResult.recordset[0].bin_id;
+    const bin_id = qrResult.row[0].bin_id;
 
     // 3. Calculate points
     const points_earned = calculatePoints(trash_type, item_count);
 
     // 4. Insert TrashDrop
-    await sql.query`
-      INSERT INTO TrashDrops (user_id, bin_id, trash_type, item_count, points_earned)
-      VALUES (${user_id}, ${bin_id}, ${trash_type}, ${item_count}, ${points_earned})
-    `;
+    await pool.query(
+      `INSERT INTO trashdrops (user_id, bin_id, trash_type, item_count, points_earned, drop_time)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [user_id, bin_id, trash_type, item_count, points_earned]
+    );
 
     // 5. Update user total points
-    await sql.query`
-      UPDATE Users SET total_points = total_points + ${points_earned} WHERE user_id = ${user_id}
-    `;
+    await pool.query(
+      `UPDATE users
+       SET total_points = total_points + $1
+       WHERE user_id = $2`,
+      [points_earned, user_id]
+    );
 
     // 6. Mark QR code as used
-    await sql.query`
-      UPDATE QRCodes SET is_used = 1 WHERE qr_id = ${qr_id}
-    `;
+    await pool.query(`UPDATE qrcodes SET is_used = TRUE WHERE qr_id = $1`, [
+      qr_id,
+    ]);
 
     res.json({ message: "Trash drop recorded successfully", points_earned });
   } catch (err) {
@@ -61,10 +68,14 @@ router.get("/:bin_id", async (req, res) => {
   const bin_id = req.params.bin_id;
 
   try {
-    const result = await sql.query`
-      SELECT * FROM QRCodes WHERE bin_id = ${bin_id} ORDER BY created_at DESC
-    `;
-    res.json(result.recordset);
+    const result = await pool.query(
+      `SELECT * FROM qrcodes
+       WHERE bin_id = $1
+       ORDER BY created_at DESC`,
+      [bin_id]
+    );
+
+    res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

@@ -1,36 +1,24 @@
-const sql = require("mssql");
+const { Pool } = require("pg");
 
-// ✅ First log your environment variables
-console.log("ENV:", {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE,
-  port: process.env.DB_PORT
-});
-
-// ✅ Then define your config object
-const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE,
-  port: Number(process.env.DB_PORT), // convert to number
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
+const pool = new Pool({
+  host: process.env.PGHOST,
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE,
+  port: process.env.PGPORT || 5432,
+  ssl: {
+    rejectUnauthorized: false, // Render Postgres uses SSL
   },
-};
-
+});
 
 const connectDB = async () => {
   try {
-    await sql.connect(config);
-    console.log("✅ Connected to SQL Server (TCP/IP)");
+    await pool.query("SELECT 1"); // simple test query
+    console.log("✅ Connected to PostgreSQL on Render");
   } catch (err) {
-    console.error("❌ Database connection failed:", err);
+    console.error("❌ PostgreSQL connection failed:", err);
+    throw err;
   }
 };
 
-module.exports = { sql, connectDB };
-
+module.exports = { pool, connectDB };

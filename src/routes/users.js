@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { sql } = require("../config/db");
+const { pool } = require("../config/db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -13,10 +13,11 @@ router.post("/register", async (req, res) => {
     const hashedPhone = await bcrypt.hash(phone_hash, 10);
 
     // Insert user
-    await sql.query`
-      INSERT INTO Users (full_name, username, phone_hash)
-      VALUES (${full_name}, ${username}, ${hashedPhone})
-    `;
+    await pool.query(
+      `INSERT INTO users (full_name, username, phone_hash)
+       VALUES ($1, $2, $3)`,
+      [full_name, username, hashedPhone]
+    );
 
     res.status(201).json({ message: "User registered successfully!" });
   } catch (err) {
@@ -30,11 +31,12 @@ router.post("/login", async (req, res) => {
   const { username, phone_hash } = req.body;
 
   try {
-    const result = await sql.query`
-      SELECT * FROM Users WHERE username = ${username}
-    `;
+    const result = await pool.query(`
+      SELECT * FROM users WHERE username = $1,
+      [username]
+    `);
 
-    const user = result.recordset[0];
+    const user = result.row[0];
     if (!user) return res.status(400).json({ error: "User not found" });
 
     // Compare phone number
@@ -60,15 +62,15 @@ router.get("/:id", async (req, res) => {
   const userId = req.params.id;
 
   try {
-    const result = await sql.query`
+    const result = await pool.query (`
       SELECT user_id, full_name, username, total_points, created_at
-      FROM Users
-      WHERE user_id = ${userId}
-    `;
-    if (!result.recordset[0])
+      FROM users
+      WHERE user_id = $1
+    `, [userId]);
+    if (!result.row.length === 0)
       return res.status(404).json({ error: "User not found" });
 
-    res.json(result.recordset[0]);
+    res.json(result.row[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
